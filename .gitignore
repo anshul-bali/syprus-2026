@@ -52,6 +52,3 @@ next-env.d.ts
 
 # Local embedded PostgreSQL data directory (npm run db:pg)
 .postgres/
-
-.vercel
-.env*
