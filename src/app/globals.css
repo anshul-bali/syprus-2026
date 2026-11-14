@@ -1,0 +1,343 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   SYPRUS brand scale — premium blue on white.
+   Registered as Tailwind theme tokens so `bg-brand-600`, `text-brand-100`, etc.
+   are real utilities rather than arbitrary values.
+--------------------------------------------------------------------------- */
+@theme {
+  --color-brand-50: oklch(0.975 0.012 253);
+  --color-brand-100: oklch(0.943 0.028 251);
+  --color-brand-200: oklch(0.892 0.052 251);
+  --color-brand-300: oklch(0.813 0.09 250);
+  --color-brand-400: oklch(0.698 0.14 251);
+  --color-brand-500: oklch(0.592 0.19 256);
+  --color-brand-600: oklch(0.511 0.217 263);
+  --color-brand-700: oklch(0.442 0.203 263);
+  --color-brand-800: oklch(0.376 0.173 264);
+  --color-brand-900: oklch(0.321 0.14 264);
+  --color-brand-950: oklch(0.216 0.09 264);
+
+  --color-teal-400: oklch(0.78 0.12 195);
+  --color-teal-600: oklch(0.6 0.12 195);
+
+  --color-sand-100: oklch(0.965 0.02 95);
+  --color-sand-500: oklch(0.72 0.13 85);
+
+  --color-plum-500: oklch(0.55 0.17 320);
+  --color-plum-600: oklch(0.48 0.17 320);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  --background: oklch(0.995 0.002 253);
+  --foreground: oklch(0.21 0.03 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.03 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.03 264);
+  --primary: oklch(0.511 0.217 263);
+  --primary-foreground: oklch(0.985 0.006 253);
+  --secondary: oklch(0.962 0.014 253);
+  --secondary-foreground: oklch(0.35 0.14 264);
+  --muted: oklch(0.968 0.008 253);
+  --muted-foreground: oklch(0.53 0.02 262);
+  --accent: oklch(0.945 0.035 251);
+  --accent-foreground: oklch(0.32 0.15 264);
+  /* Measured, not guessed: the shadcn default (0.577) renders error text at
+     4.36:1 on its own 5% tint, which fails AA at 14px. 0.54 clears it at 4.85:1
+     and lifts white-on-red buttons from 4.77:1 to 5.32:1. */
+  --destructive: oklch(0.54 0.245 27.325);
+  --border: oklch(0.912 0.012 253);
+  --input: oklch(0.912 0.012 253);
+  --ring: oklch(0.592 0.19 256);
+  --chart-1: oklch(0.592 0.19 256);
+  --chart-2: oklch(0.698 0.14 251);
+  --chart-3: oklch(0.78 0.12 195);
+  --chart-4: oklch(0.55 0.17 320);
+  --chart-5: oklch(0.442 0.203 263);
+  --radius: 0.65rem;
+  --sidebar: oklch(0.985 0.006 253);
+  --sidebar-foreground: oklch(0.21 0.03 264);
+  --sidebar-primary: oklch(0.511 0.217 263);
+  --sidebar-primary-foreground: oklch(0.985 0.006 253);
+  --sidebar-accent: oklch(0.945 0.035 251);
+  --sidebar-accent-foreground: oklch(0.32 0.15 264);
+  --sidebar-border: oklch(0.912 0.012 253);
+  --sidebar-ring: oklch(0.592 0.19 256);
+}
+
+.dark {
+  --background: oklch(0.19 0.02 265);
+  --foreground: oklch(0.96 0.01 253);
+  --card: oklch(0.24 0.025 265);
+  --card-foreground: oklch(0.96 0.01 253);
+  --popover: oklch(0.24 0.025 265);
+  --popover-foreground: oklch(0.96 0.01 253);
+  --primary: oklch(0.698 0.14 251);
+  --primary-foreground: oklch(0.19 0.03 264);
+  --secondary: oklch(0.3 0.03 265);
+  --secondary-foreground: oklch(0.96 0.01 253);
+  --muted: oklch(0.29 0.025 265);
+  --muted-foreground: oklch(0.72 0.02 262);
+  --accent: oklch(0.32 0.05 260);
+  --accent-foreground: oklch(0.96 0.01 253);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.96 0.01 253 / 12%);
+  --input: oklch(0.96 0.01 253 / 16%);
+  --ring: oklch(0.592 0.19 256);
+  --chart-1: oklch(0.698 0.14 251);
+  --chart-2: oklch(0.78 0.12 195);
+  --chart-3: oklch(0.592 0.19 256);
+  --chart-4: oklch(0.65 0.16 320);
+  --chart-5: oklch(0.813 0.09 250);
+  --sidebar: oklch(0.24 0.025 265);
+  --sidebar-foreground: oklch(0.96 0.01 253);
+  --sidebar-primary: oklch(0.698 0.14 251);
+  --sidebar-primary-foreground: oklch(0.19 0.03 264);
+  --sidebar-accent: oklch(0.32 0.05 260);
+  --sidebar-accent-foreground: oklch(0.96 0.01 253);
+  --sidebar-border: oklch(0.96 0.01 253 / 12%);
+  --sidebar-ring: oklch(0.592 0.19 256);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+  }
+  /* Visible focus for keyboard users on every interactive element. */
+  :where(a, button, [role="button"], input, select, textarea, summary):focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+}
+
+@layer components {
+  .syprus-hero {
+    background:
+      radial-gradient(60rem 30rem at 15% -10%, oklch(0.592 0.19 256 / 22%), transparent 60%),
+      radial-gradient(45rem 25rem at 95% 5%, oklch(0.698 0.14 251 / 18%), transparent 55%),
+      linear-gradient(180deg, oklch(0.985 0.006 253), oklch(1 0 0));
+  }
+
+  .syprus-grid {
+    background-image:
+      linear-gradient(oklch(0.511 0.217 263 / 6%) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(0.511 0.217 263 / 6%) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  .syprus-card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-brand-900/8;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  /* Screen-reader-only helper, used for live region announcements. */
+  .sr-only-focusable:not(:focus):not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Dark mode.
+
+   The pastel scales below are used in one of two roles — a *surface tint or
+   border* (50–300) or a *text colour on that tint* (700–950) — so remapping
+   those shades inside `.dark` flips every screen at once, instead of adding a
+   `dark:` variant to two hundred class lists and missing some.
+
+   The mid scales (500–600) are deliberately left alone: they are fills —
+   progress bars, status dots, primary buttons — where the same colour has to
+   stay saturated in both themes.
+--------------------------------------------------------------------------- */
+.dark {
+  /* Blue brand tints and borders, then the accent text that sits on them. */
+  --color-brand-50: oklch(0.27 0.045 265);
+  --color-brand-100: oklch(0.32 0.06 265);
+  --color-brand-200: oklch(0.38 0.075 265);
+  --color-brand-300: oklch(0.46 0.09 264);
+  --color-brand-800: oklch(0.86 0.075 250);
+  --color-brand-900: oklch(0.92 0.05 250);
+
+  /* Ivory ground becomes a warm charcoal, not a blue-grey. */
+  --color-sand-100: oklch(0.26 0.022 90);
+  --color-sand-500: oklch(0.78 0.1 85);
+
+  /* Status palettes: deep tint, mid border, light text. */
+  --color-emerald-50: oklch(0.28 0.05 160);
+  --color-emerald-100: oklch(0.33 0.07 160);
+  --color-emerald-200: oklch(0.42 0.09 160);
+  --color-emerald-600: oklch(0.72 0.14 160);
+  --color-emerald-700: oklch(0.8 0.12 160);
+  --color-emerald-800: oklch(0.86 0.1 160);
+  --color-emerald-900: oklch(0.91 0.07 160);
+  --color-emerald-950: oklch(0.94 0.05 160);
+
+  --color-amber-50: oklch(0.29 0.05 85);
+  --color-amber-100: oklch(0.34 0.07 85);
+  --color-amber-200: oklch(0.43 0.09 85);
+  --color-amber-300: oklch(0.55 0.12 85);
+  --color-amber-400: oklch(0.66 0.14 85);
+  --color-amber-700: oklch(0.82 0.13 85);
+  --color-amber-800: oklch(0.87 0.11 85);
+  --color-amber-900: oklch(0.91 0.08 85);
+  --color-amber-950: oklch(0.94 0.05 85);
+
+  --color-rose-50: oklch(0.28 0.05 20);
+  --color-rose-100: oklch(0.33 0.07 20);
+  --color-rose-200: oklch(0.43 0.09 20);
+  --color-rose-800: oklch(0.83 0.1 20);
+  --color-rose-900: oklch(0.88 0.08 20);
+  --color-rose-950: oklch(0.92 0.05 20);
+
+  --color-violet-50: oklch(0.28 0.05 300);
+  --color-violet-100: oklch(0.33 0.07 300);
+  --color-violet-200: oklch(0.43 0.09 300);
+  --color-violet-800: oklch(0.84 0.09 300);
+  --color-violet-900: oklch(0.88 0.07 300);
+  --color-violet-950: oklch(0.92 0.05 300);
+
+  --color-sky-50: oklch(0.28 0.05 240);
+  --color-sky-100: oklch(0.33 0.06 240);
+  --color-sky-200: oklch(0.42 0.08 240);
+  --color-sky-300: oklch(0.52 0.1 240);
+  --color-sky-950: oklch(0.92 0.05 240);
+
+  --color-plum-500: oklch(0.68 0.16 320);
+  --color-plum-600: oklch(0.75 0.14 320);
+  --color-teal-400: oklch(0.8 0.11 195);
+  --color-teal-600: oklch(0.72 0.12 195);
+
+  /* Neutral chips (paused, deactivated, closed) keep their pairing: a deep
+     chip with light text, instead of a white pill floating on a dark card. */
+  --color-slate-50: oklch(0.28 0.02 260);
+  --color-slate-100: oklch(0.33 0.025 260);
+  --color-slate-200: oklch(0.4 0.03 260);
+  --color-slate-300: oklch(0.5 0.03 260);
+  --color-slate-400: oklch(0.62 0.025 260);
+  --color-slate-500: oklch(0.72 0.025 260);
+  --color-slate-600: oklch(0.82 0.02 260);
+  --color-slate-700: oklch(0.88 0.015 260);
+  --color-slate-900: oklch(0.94 0.01 260);
+}
+
+/* Accent text and icons: brand-600/700 stay the button fills, so the text
+   role is corrected here rather than by changing the scale. Unlayered on
+   purpose — these must win over the utilities. */
+.dark .text-brand-600 {
+  color: var(--color-brand-300);
+}
+.dark .text-brand-700 {
+  color: var(--color-brand-200);
+}
+
+/* White is never a surface in dark mode. These are the panels that were
+   written as literal whites before a theme existed. */
+.dark .bg-white {
+  background-color: var(--card);
+}
+.dark .bg-white\/60 {
+  background-color: color-mix(in oklab, var(--card) 60%, transparent);
+}
+.dark .bg-white\/70 {
+  background-color: color-mix(in oklab, var(--card) 70%, transparent);
+}
+.dark .bg-white\/80 {
+  background-color: color-mix(in oklab, var(--card) 80%, transparent);
+}
+.dark .bg-white\/90,
+.dark .bg-white\/92 {
+  background-color: color-mix(in oklab, var(--card) 92%, transparent);
+}
+
+.dark .syprus-hero {
+  background:
+    radial-gradient(60rem 30rem at 15% -10%, oklch(0.592 0.19 256 / 26%), transparent 60%),
+    radial-gradient(45rem 25rem at 95% 5%, oklch(0.698 0.14 251 / 16%), transparent 55%),
+    linear-gradient(180deg, oklch(0.23 0.025 265), oklch(0.19 0.02 265));
+}
+
+.dark .syprus-grid {
+  background-image:
+    linear-gradient(oklch(0.698 0.14 251 / 9%) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.698 0.14 251 / 9%) 1px, transparent 1px);
+}
+
+.dark .syprus-card-hover:hover {
+  box-shadow: 0 10px 30px -12px oklch(0 0 0 / 60%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

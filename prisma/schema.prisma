@@ -1,0 +1,1428 @@
+// SYPRUS data model
+// PostgreSQL via Prisma. Table names are snake_case and map 1:1 to the
+// documented schema in docs/DATA_MODEL.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  CANDIDATE
+  EMPLOYER
+  ADMIN
+}
+
+enum AccountStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum WorkPreference {
+  REMOTE
+  HYBRID
+  ONSITE
+  FLEXIBLE
+  OPEN
+}
+
+enum WorkMode {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  RETURNISH
+}
+
+enum ExperienceType {
+  PAID_EMPLOYMENT
+  FREELANCE
+  INTERNSHIP
+  VOLUNTEERING
+  ENTREPRENEURSHIP
+  CAREGIVING
+  COMMUNITY_LEADERSHIP
+  EDUCATION
+  UP_SKILLING
+}
+
+enum SkillCategory {
+  TECHNICAL
+  ANALYTICAL
+  COMMUNICATION
+  LEADERSHIP
+  COLLABORATION
+  OPERATIONAL
+  CREATIVE
+  DIGITAL
+  DOMAIN
+}
+
+enum ProficiencyLevel {
+  DEVELOPING
+  FUNCTIONAL
+  PROFICIENT
+  ADVANCED
+  EXPERT
+}
+
+// Three distinct states, deliberately not collapsed:
+//   machine-proposed  -> AI_SUGGESTED (model) or RULE_INFERRED (keyword engine)
+//   person-stated     -> SELF_REPORTED
+//   person-confirmed  -> USER_CONFIRMED (candidate accepted the proposal)
+//   independently evidenced -> ASSESSMENT_VERIFIED (passed a platform assessment)
+//                        or HR_REVIEWED (a reviewer inspected the evidence)
+enum SkillValidationStatus {
+  SELF_REPORTED
+  RULE_INFERRED
+  AI_SUGGESTED
+  USER_CONFIRMED
+  ASSESSMENT_VERIFIED
+  HR_REVIEWED
+  DISPUTED
+}
+
+enum EvidenceType {
+  ONBOARDING_ANSWER
+  EXPERIENCE_DESCRIPTION
+  PROJECT_ARTIFACT
+  CERTIFICATION
+  ASSESSMENT
+  PEER_REVIEW
+  EMPLOYER_CONFIRMATION
+}
+
+enum SharingMode {
+  NOT_VISIBLE
+  ANONYMOUS_ONLY
+  ANONYMOUS_WITH_APPLY
+}
+
+enum OrganizationVerification {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum JobStatus {
+  DRAFT
+  PENDING_MODERATION
+  PUBLISHED
+  PAUSED
+  CLOSED
+  REJECTED
+}
+
+enum SkillRequirementLevel {
+  REQUIRED
+  PREFERRED
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  IN_REVIEW
+  SHORTLISTED
+  INTERVIEW_INVITED
+  INTERVIEW_COMPLETED
+  OFFER_EXTENDED
+  REJECTED
+  WITHDRAWN
+  HIRED
+}
+
+enum MatchStatus {
+  COMPUTED
+  ARCHIVED
+}
+
+enum ResourceType {
+  COURSE
+  MICRO_CREDENTIAL
+  CERTIFICATION
+  WORKSHOP
+  BOOTCAMP
+  MENTORSHIP
+  PRACTICE_PROJECT
+  READING
+}
+
+enum LearningFormat {
+  SELF_PACED
+  INSTRUCTOR_LED
+  COHORT
+  ONE_ON_ONE
+}
+
+enum LearningPlanStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+enum LearningPlanItemStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+enum ConsentType {
+  DATA_PROCESSING
+  SENSITIVE_DATA
+  ANONYMIZED_PROFILE_SHARING
+  IDENTIFIED_PROFILE_SHARING
+  RULE_BASED_INFERENCE
+  EMPLOYER_CONTACT
+  PRODUCT_EMAILS
+  RESEARCH_CONTRIBUTION
+}
+
+enum ConsentDecision {
+  GRANTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum NotificationType {
+  APPLICATION_UPDATE
+  INTERVIEW_INVITATION
+  NEW_MATCH
+  JOB_RECOMMENDATION
+  PLAN_REMINDER
+  VERIFICATION_UPDATE
+  ADMIN_NOTICE
+  MESSAGE
+  DISCLOSURE_REQUEST
+  DISCLOSURE_DECISION
+  SUGGESTION_INBOX
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ConversationStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum EngineName {
+  SKILL_INFERENCE
+  MATCHING
+  GAP_ANALYSIS
+  PATHWAY_PLANNER
+  FAIRNESS_AUDIT
+  ANONYMIZATION
+}
+
+enum EngineStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum ReadinessBand {
+  EMERGING
+  DEVELOPING
+  JOB_READY
+  STRONG_MATCH
+}
+
+// ---------------------------------------------------------------------------
+// Identity, roles and permissions
+// ---------------------------------------------------------------------------
+
+model User {
+  id               String        @id @default(cuid())
+  email            String        @unique
+  passwordHash     String
+  name             String
+  role             UserRole      @default(CANDIDATE)
+  status           AccountStatus @default(ACTIVE)
+  emailVerifiedAt  DateTime?
+  lastLoginAt      DateTime?
+  failedLoginCount Int           @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  candidateProfile CandidateProfile?
+  ownedOrganization Organization?    @relation("OrgOwner")
+  memberships       Organization[]   @relation("OrgMembers")
+  consentRecords    ConsentRecord[]
+  conversations     Conversation[]
+  notifications     Notification[]
+  applications      Application[]    @relation("ApplicationOwner")
+  learningPlans     LearningPlan[]
+  auditEvents       AuditEvent[]     @relation("AuditActor")
+  reviewedEvidence  SkillEvidence[]  @relation("EvidenceReviewer")
+  verifiedOrgs      Organization[]   @relation("OrgVerifier")
+  profileViews      ProfileView[]
+  assistantSessions AssistantSession[]
+  emailVerifications EmailVerification[]
+
+  @@index([role, status])
+  @@map("users")
+}
+
+enum VerificationPurpose {
+  SIGNUP
+  LOGIN
+}
+
+enum VerificationTransport {
+  SUPABASE
+  PREVIEW
+}
+
+/**
+ * One emailed verification. The value itself is never stored for a real delivery
+ * — only its digest, a short expiry, an attempt count and a single-use
+ * consumption stamp. `previewCode` and `previewToken` exist for the
+ * demonstration path only (reserved example addresses that no mailer will
+ * accept), so the screen can show what it could not send; both are null
+ * whenever a mail was attempted.
+ *
+ * A code and a link are two ways of spending the SAME grant: `codeHash` answers
+ * the six digits, `linkTokenHash` answers the URL token, and either one stamps
+ * `verifiedAt`. That is what lets a mail client that cannot copy-paste still
+ * verify in one click, without a second kind of session.
+ *
+ * `consumedAt` says the row is retired — redeemed, expired, out of attempts or
+ * never delivered. `verifiedAt` is stamped only on a successful redemption, so
+ * "this verification was passed" stays distinguishable from "this code was
+ * written off", which matters because a session is minted from that fact.
+ */
+model EmailVerification {
+  id            String                @id @default(cuid())
+  userId        String
+  purpose       VerificationPurpose
+  codeHash      String
+  linkTokenHash String?               @unique
+  previewCode   String?
+  previewToken  String?
+  transport     VerificationTransport
+  expiresAt     DateTime
+  attempts      Int                   @default(0)
+  consumedAt    DateTime?
+  verifiedAt    DateTime?
+  createdAt     DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, purpose, expiresAt])
+  @@map("email_verifications")
+}
+
+model RoleDefinition {
+  id          String           @id @default(cuid())
+  role        UserRole         @unique
+  label       String
+  description String
+  createdAt   DateTime         @default(now())
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  id          String           @id @default(cuid())
+  role        UserRole
+  key         String
+  label       String
+  description String
+  roleRef     RoleDefinition   @relation(fields: [role], references: [role], onDelete: Cascade)
+
+  @@unique([role, key])
+  @@index([role])
+  @@map("role_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Candidates
+// ---------------------------------------------------------------------------
+
+model CandidateProfile {
+  id                 String        @id @default(cuid())
+  userId             String        @unique
+  anonymousHandle    String        @unique
+  headline           String?
+  summary            String?
+  locationCity       String?
+  locationCountry    String?
+  workPreference     WorkPreference @default(OPEN)
+  availabilityHours  Int?
+  targetRole         String?
+  targetIndustry     String?
+  careerBreakMonths  Int?
+  breakReason        String?
+  returnTimeline     String?
+  yearsOfExperience  Float         @default(0)
+  educationSummary   String?
+  sharingMode        SharingMode   @default(ANONYMOUS_ONLY)
+  visibleToEmployers Boolean       @default(false)
+  onboardingComplete Boolean       @default(false)
+  profileCompletion  Int           @default(0)
+  links              Json?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experiences   Experience[]
+  skills        CandidateSkill[]
+  matches       Match[]
+  applications  Application[]
+  learningPlans LearningPlan[]
+  gapReports    SkillGapReport[]
+  profileViews  ProfileView[]
+  shortlists    ShortlistEntry[]
+  aiProposals      AiProposal[]
+  assessmentAttempts AssessmentAttempt[]
+  evidenceUploads  EvidenceUpload[]
+  orchestrationRuns OrchestrationRun[]
+  marketInsights   MarketInsight[]
+  disclosureRequests IdentityDisclosureRequest[]
+  graphAnnotations GraphAnnotation[]
+
+  @@index([visibleToEmployers, sharingMode])
+  @@index([careerBreakMonths])
+  @@map("candidate_profiles")
+}
+
+model Experience {
+  id                 String         @id @default(cuid())
+  candidateProfileId String
+  type               ExperienceType
+  title              String
+  organization       String?
+  description        String
+  achievements       String?
+  startDate          DateTime?
+  endDate            DateTime?
+  ongoing            Boolean        @default(false)
+  hoursPerWeek       Int?
+  isCaregiving       Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  candidateProfile CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  evidence         SkillEvidence[]
+
+  @@index([candidateProfileId])
+  @@map("experiences")
+}
+
+// ---------------------------------------------------------------------------
+// Skills
+// ---------------------------------------------------------------------------
+
+model Skill {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  slug         String        @unique
+  category     SkillCategory
+  transferable Boolean       @default(true)
+  description  String
+  aliases      String[]      @default([])
+  relatedSlugs String[]      @default([])
+  createdAt    DateTime      @default(now())
+
+  candidateSkills CandidateSkill[]
+  jobSkills       JobSkill[]
+  resources       LearningResource[]
+  assessments     Assessment[]
+  aiProposals     AiProposal[]
+
+  @@index([category])
+  @@map("skills")
+}
+
+model CandidateSkill {
+  id               String                @id @default(cuid())
+  candidateProfileId String
+  skillId          String
+  level            ProficiencyLevel      @default(FUNCTIONAL)
+  confidence       Float                 @default(0.5)
+  validationStatus SkillValidationStatus @default(SELF_REPORTED)
+  evidenceCount    Int                   @default(0)
+  source           String                @default("MANUAL")
+  note             String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  skill            Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  evidence         SkillEvidence[]
+
+  @@unique([candidateProfileId, skillId])
+  @@index([skillId])
+  @@map("candidate_skills")
+}
+
+model SkillEvidence {
+  id               String       @id @default(cuid())
+  candidateSkillId String
+  experienceId     String?
+  type             EvidenceType
+  description      String
+  url              String?
+  reviewedById     String?
+  reviewNote       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime     @default(now())
+
+  candidateSkill CandidateSkill @relation(fields: [candidateSkillId], references: [id], onDelete: Cascade)
+  experience     Experience?    @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+  reviewedBy     User?          @relation("EvidenceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([candidateSkillId])
+  @@map("skill_evidence")
+}
+
+// ---------------------------------------------------------------------------
+// Employers and jobs
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id               String                 @id @default(cuid())
+  name             String
+  slug             String                 @unique
+  website          String?
+  industry         String?
+  sizeLabel        String?
+  locationCity     String?
+  locationCountry  String?
+  description      String?
+  flexPolicy       String?
+  returnshipNote   String?
+  verificationStatus OrganizationVerification @default(PENDING)
+  verifiedAt       DateTime?
+  verifiedById     String?
+  verificationNote String?
+  ownerUserId      String?                @unique
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  owner        User?    @relation("OrgOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  verifier     User?    @relation("OrgVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  members      User[]   @relation("OrgMembers")
+  jobs         Job[]
+  applications Application[]
+  profileViews ProfileView[]
+  shortlists   Shortlist[]
+  disclosureRequests IdentityDisclosureRequest[]
+
+  @@index([verificationStatus])
+  @@map("organizations")
+}
+
+model Job {
+  id                 String         @id @default(cuid())
+  organizationId     String
+  title              String
+  description        String
+  responsibilities   String[]       @default([])
+  requirementsText   String?
+  locationCity       String?
+  locationCountry    String?
+  workMode           WorkMode       @default(HYBRID)
+  employmentType     EmploymentType @default(FULL_TIME)
+  salaryMin          Int?
+  salaryMax          Int?
+  currency           String         @default("INR")
+  experienceYearsMin Float?
+  experienceYearsMax Float?
+  status             JobStatus      @default(DRAFT)
+  reEntryFriendly    Boolean        @default(true)
+  flexibleHours      Boolean        @default(false)
+  returnshipProgram  Boolean        @default(false)
+  postedAt           DateTime?
+  closesAt           DateTime?
+  moderatedAt        DateTime?
+  moderatedById      String?
+  moderationNote     String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  skills       JobSkill[]
+  matches      Match[]
+  applications Application[]
+  shortlists   ShortlistEntry[]
+  gapReports   SkillGapReport[]
+  languageReviews LanguageReview[]
+  marketInsights  MarketInsight[]
+  disclosureRequests IdentityDisclosureRequest[]
+
+  @@index([status, postedAt])
+  @@index([organizationId])
+  @@map("jobs")
+}
+
+model JobSkill {
+  id           String                @id @default(cuid())
+  jobId        String
+  skillId      String
+  level        ProficiencyLevel      @default(PROFICIENT)
+  weight       Int                   @default(1)
+  requirement  SkillRequirementLevel @default(REQUIRED)
+
+  job   Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, skillId])
+  @@index([skillId])
+  @@map("job_skills")
+}
+
+// ---------------------------------------------------------------------------
+// Matching, applications and shortlists
+// ---------------------------------------------------------------------------
+
+model Match {
+  id                 String      @id @default(cuid())
+  candidateProfileId String
+  jobId              String
+  score              Float
+  requiredScore      Float
+  preferredScore     Float
+  evidenceScore      Float
+  preferenceScore    Float
+  explanation        Json
+  modelVersion       String
+  weightVersion      String      @default("prototype-2026-11-a")
+  status             MatchStatus @default(COMPUTED)
+  computedAt         DateTime    @default(now())
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  job              Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateProfileId, jobId])
+  @@index([jobId, score])
+  @@index([candidateProfileId, score])
+  @@map("matches")
+}
+
+model Application {
+  id                   String            @id @default(cuid())
+  candidateProfileId   String
+  jobId                String
+  organizationId       String
+  userId               String
+  status               ApplicationStatus @default(SUBMITTED)
+  coverLetter          String?
+  identityConsentAt    DateTime?
+  matchScoreSnapshot   Float?
+  source               String            @default("DIRECT")
+  interviewScheduledAt DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  candidateProfile CandidateProfile           @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  job              Job                        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user             User                       @relation("ApplicationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  statusEvents     ApplicationStatusEvent[]
+
+  @@unique([candidateProfileId, jobId])
+  @@index([organizationId, status])
+  @@index([candidateProfileId])
+  @@map("applications")
+}
+
+model ApplicationStatusEvent {
+  id            String             @id @default(cuid())
+  applicationId String
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  note          String?
+  actorUserId   String?
+  createdAt     DateTime           @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("application_status_events")
+}
+
+model Shortlist {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entries      ShortlistEntry[]
+
+  @@map("shortlists")
+}
+
+model ShortlistEntry {
+  id             String   @id @default(cuid())
+  shortlistId    String
+  jobId          String
+  candidateProfileId String
+  note           String?
+  addedById      String?
+  createdAt      DateTime @default(now())
+
+  shortlist        Shortlist         @relation(fields: [shortlistId], references: [id], onDelete: Cascade)
+  job              Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateProfile CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, candidateProfileId])
+  @@map("shortlist_entries")
+}
+
+model ProfileView {
+  id                 String   @id @default(cuid())
+  candidateProfileId String
+  organizationId     String
+  viewerUserId       String
+  jobId              String?
+  scoreSeen          Float?
+  revealedIdentity   Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  viewer           User             @relation(fields: [viewerUserId], references: [id], onDelete: Cascade)
+
+  @@index([candidateProfileId])
+  @@index([organizationId])
+  @@map("profile_views")
+}
+
+// ---------------------------------------------------------------------------
+// Learning
+// ---------------------------------------------------------------------------
+
+model LearningResource {
+  id              String         @id @default(cuid())
+  title           String
+  provider        String
+  url             String?
+  type            ResourceType
+  format          LearningFormat @default(SELF_PACED)
+  skillId         String?
+  targetLevel     ProficiencyLevel @default(PROFICIENT)
+  outcome         String
+  durationHours   Int?
+  costLabel       String?
+  isFree          Boolean        @default(false)
+  demonstration   Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+
+  skill     Skill?             @relation(fields: [skillId], references: [id], onDelete: SetNull)
+  planItems LearningPlanItem[]
+
+  @@index([skillId])
+  @@map("learning_resources")
+}
+
+model LearningPlan {
+  id                 String             @id @default(cuid())
+  candidateProfileId String
+  userId             String
+  title              String
+  goal               String
+  summary            String
+  status             LearningPlanStatus @default(ACTIVE)
+  priority           Int                @default(1)
+  targetJobId        String?
+  generatedBy        String             @default("PATHWAY_PLANNER_RULES")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  candidateProfile CandidateProfile    @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items            LearningPlanItem[]
+
+  @@index([candidateProfileId])
+  @@map("learning_plans")
+}
+
+model LearningPlanItem {
+  id            String                   @id @default(cuid())
+  planId        String
+  resourceId    String
+  position      Int
+  status        LearningPlanItemStatus   @default(NOT_STARTED)
+  gapSkillSlug  String?
+  note          String?
+  completedAt   DateTime?
+  createdAt     DateTime                 @default(now())
+
+  plan     LearningPlan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  resource LearningResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, position])
+  @@map("learning_plan_items")
+}
+
+model SkillGapReport {
+  id                 String        @id @default(cuid())
+  candidateProfileId String
+  targetJobId        String?
+  readiness          ReadinessBand @default(DEVELOPING)
+  readinessScore     Float
+  strengths          Json
+  gaps               Json
+  transferables      Json
+  scores             Json
+  generatedBy        String        @default("GAP_ANALYSIS_RULES")
+  createdAt          DateTime      @default(now())
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  targetJob        Job?             @relation(fields: [targetJobId], references: [id], onDelete: SetNull)
+
+  @@index([candidateProfileId])
+  @@map("skill_gap_reports")
+}
+
+// ---------------------------------------------------------------------------
+// Conversational onboarding
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id        String             @id @default(cuid())
+  userId    String
+  channel   String             @default("ONBOARDING")
+  status    ConversationStatus @default(IN_PROGRESS)
+  stepKey   String             @default("intro")
+  answers   Json               @default("{}")
+  startedAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, status])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  stepKey        String?
+  meta           Json?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+// ---------------------------------------------------------------------------
+// Consent, audit, notifications, engine health
+// ---------------------------------------------------------------------------
+
+model ConsentRecord {
+  id            String          @id @default(cuid())
+  userId        String
+  type          ConsentType
+  decision      ConsentDecision
+  policyVersion String
+  scope         String?
+  decidedAt     DateTime        @default(now())
+  withdrawnAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, policyVersion, decidedAt])
+  @@index([userId])
+  @@map("consent_records")
+}
+
+model AuditEvent {
+  id            String    @id @default(cuid())
+  actorUserId   String?
+  actorRole     UserRole?
+  action        String
+  entityType    String
+  entityId      String?
+  targetUserId  String?
+  organizationId String?
+  visibility    String    @default("ADMIN")
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+/**
+ * SYPRUS Sona — the in-portal assistant.
+ *
+ * A session belongs to exactly one user, and every turn is stored with the mode
+ * that produced it, so an answer can always be traced back to the model run (or
+ * to the deterministic fallback) behind it. Nothing here is copied into an
+ * employer's view: this is the candidate's or the team member's own transcript.
+ */
+model AssistantSession {
+  id            String             @id @default(cuid())
+  userId        String
+  role          String
+  startedAt     DateTime           @default(now())
+  lastMessageAt DateTime           @default(now())
+  messages      AssistantMessage[]
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lastMessageAt])
+  @@map("assistant_sessions")
+}
+
+model AssistantMessage {
+  id             String        @id @default(cuid())
+  sessionId      String
+  role           String
+  content        String
+  mode           AiMode?
+  provider       String?
+  model          String?
+  fallbackReason String?
+  citations      Json?
+  createdAt      DateTime      @default(now())
+
+  session AssistantSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  aiRun   AiRun?           @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+  aiRunId String?
+
+  @@index([sessionId, createdAt])
+  @@map("assistant_messages")
+}
+
+model EngineRun {
+  id             String       @id @default(cuid())
+  engine         EngineName
+  status         EngineStatus
+  mode           String       @default("RULE_BASED")
+  itemsProcessed Int          @default(0)
+  itemsAffected  Int          @default(0)
+  durationMs     Int          @default(0)
+  modelVersion   String
+  inputSummary   Json?
+  errorMessage   String?
+  startedAt      DateTime     @default(now())
+  finishedAt     DateTime?
+
+  @@index([engine, startedAt])
+  @@map("engine_runs")
+}
+
+// ---------------------------------------------------------------------------
+// Multi-agent AI service (Prompt 2)
+// ---------------------------------------------------------------------------
+
+enum AiMode {
+  AI
+  DETERMINISTIC
+}
+
+enum AiRunStatus {
+  RUNNING
+  SUCCESS
+  FALLBACK
+  FAILED
+}
+
+enum AiAgentName {
+  SKILLS_DISCOVERY
+  MARKET_INTELLIGENCE
+  LEARNING_PATHWAYS
+  BIAS_AUDIT
+  ORCHESTRATOR
+  ASSISTANT_CHAT
+}
+
+enum ProposalStatus {
+  PROPOSED
+  CONFIRMED
+  EDITED
+  REJECTED
+}
+
+enum UploadStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  REMOVED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReviewStatus {
+  OPEN
+  ACKNOWLEDGED
+  DISMISSED
+}
+
+enum RequirementSource {
+  DATABASE_POSTINGS
+  LIVE_PROVIDER
+  CURATED_IMPORT
+}
+
+enum OrchestrationStatus {
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum OrchestrationStepStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FALLBACK
+  FAILED
+  SKIPPED
+}
+
+enum ReviewTaskKind {
+  BIAS_FINDING
+  SHORTLIST_DECISION
+  INTERVIEW_INVITATION
+  IDENTITY_DISCLOSURE
+  PROFILE_VISIBILITY
+  SKILL_VERIFICATION
+}
+
+enum ReviewTaskStatus {
+  OPEN
+  APPROVED
+  REJECTED
+  DEFERRED
+}
+
+/**
+ * One AI invocation. Subject, organisation and job are stored as plain ids with
+ * no foreign key on purpose: run history must outlive the records it acted on,
+ * so an account deletion cannot erase the audit trail of what a model produced.
+ */
+model AiRun {
+  id              String      @id @default(cuid())
+  agent           AiAgentName
+  status          AiRunStatus
+  mode            AiMode
+  provider        String
+  model           String
+  promptVersion   String
+  schemaVersion   String
+  fallbackReason  String?
+  fallbackNote    String?
+  attempts        Int         @default(1)
+  durationMs      Int         @default(0)
+  tokensPrompt    Int         @default(0)
+  tokensCompletion Int        @default(0)
+  tokensTotal     Int         @default(0)
+  blockedCount    Int         @default(0)
+  warningCount    Int         @default(0)
+  blocked         Json?
+  warnings        Json?
+  inputSummary    Json?
+  outputSummary   Json?
+  errorMessage    String?
+  subjectUserId   String?
+  candidateProfileId String?
+  organizationId  String?
+  jobId           String?
+  startedAt       DateTime    @default(now())
+  finishedAt      DateTime?
+
+  proposals       AiProposal[]
+  languageReviews LanguageReview[]
+  assessments     AssessmentAttempt[]
+  marketInsights  MarketInsight[]
+  assistantMessages AssistantMessage[]
+  orchestrationSteps OrchestrationStep[]
+
+  @@index([agent, startedAt])
+  @@index([status, startedAt])
+  @@index([subjectUserId])
+  @@map("ai_runs")
+}
+
+/// A skill the AI proposed, kept separate from the skills the candidate holds.
+model AiProposal {
+  id                 String         @id @default(cuid())
+  aiRunId            String
+  candidateProfileId String
+  skillId            String
+  proposedLevel      ProficiencyLevel
+  confidence         Float
+  evidence           Json
+  rationale          String
+  requiresHumanReview Boolean       @default(false)
+  status             ProposalStatus @default(PROPOSED)
+  decisionNote       String?
+  decidedById        String?
+  decidedAt          DateTime?
+  createdAt          DateTime       @default(now())
+
+  aiRun            AiRun            @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  skill            Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([candidateProfileId, status])
+  @@map("ai_proposals")
+}
+
+/// Optional short assessment that supports skill validation.
+model Assessment {
+  id            String   @id @default(cuid())
+  skillId       String
+  title         String
+  instructions  String
+  questionCount Int
+  passMark      Float
+  isActive      Boolean  @default(true)
+  demonstration Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  skill    Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  questions AssessmentQuestion[]
+  attempts  AssessmentAttempt[]
+
+  @@index([skillId, isActive])
+  @@map("assessments")
+}
+
+model AssessmentQuestion {
+  id           String  @id @default(cuid())
+  assessmentId String
+  position     Int
+  prompt       String
+  options      String[]
+  correctIndex Int
+  explanation  String
+
+  assessment Assessment             @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  responses  AssessmentResponse[]
+
+  @@unique([assessmentId, position])
+  @@map("assessment_questions")
+}
+
+model AssessmentAttempt {
+  id                 String    @id @default(cuid())
+  assessmentId       String
+  candidateProfileId String
+  aiRunId            String?
+  score              Float
+  passed             Boolean
+  startedAt          DateTime  @default(now())
+  completedAt        DateTime?
+
+  assessment Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  aiRun        AiRun?           @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+  responses    AssessmentResponse[]
+
+  @@index([candidateProfileId])
+  @@map("assessment_attempts")
+}
+
+model AssessmentResponse {
+  id            String  @id @default(cuid())
+  attemptId     String
+  questionId    String
+  selectedIndex Int
+  correct       Boolean
+
+  attempt  AssessmentAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@map("assessment_responses")
+}
+
+/// Evidence uploads supporting a skill claim. Content lives on disk (or object
+/// storage); only metadata and a checksum are stored here.
+model EvidenceUpload {
+  id                 String       @id @default(cuid())
+  candidateProfileId String
+  candidateSkillId   String?
+  uploadedById       String
+  filename           String
+  storedKey          String       @unique
+  mimeType           String
+  sizeBytes          Int
+  sha256             String
+  status             UploadStatus @default(PENDING)
+  reviewNote         String?
+  reviewedById       String?
+  createdAt          DateTime     @default(now())
+  reviewedAt         DateTime?
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@index([candidateProfileId, status])
+  @@map("evidence_uploads")
+}
+
+/// Bias-audit result for one posting, stored for human review.
+model LanguageReview {
+  id               String       @id @default(cuid())
+  jobId            String
+  aiRunId          String?
+  overallRisk      RiskLevel
+  findings         Json
+  continuityChecks Json
+  positives        Json
+  mode             AiMode
+  status           ReviewStatus @default(OPEN)
+  reviewNote       String?
+  reviewedById     String?
+  createdAt        DateTime     @default(now())
+  reviewedAt       DateTime?
+
+  job   Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  aiRun AiRun? @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+
+  @@index([jobId, status])
+  @@map("language_reviews")
+}
+
+/// A persisted match breakdown. `isLive` is only true when a configured live
+/// connector produced the requirement set — never asserted by the model.
+model MarketInsight {
+  id                 String            @id @default(cuid())
+  jobId              String
+  candidateProfileId String?
+  organizationId     String?
+  aiRunId            String?
+  source             RequirementSource
+  isLive             Boolean           @default(false)
+  dataAsOf           DateTime
+  score              Float
+  components         Json
+  matched            Json
+  gaps               Json
+  explanation        String[]
+  excludedSignals    String[]
+  createdAt          DateTime          @default(now())
+
+  job              Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateProfile CandidateProfile? @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  aiRun            AiRun?          @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+
+  @@index([jobId, createdAt])
+  @@map("market_insights")
+}
+
+/// Registry of job-requirement connectors. The MVP row is the platform database
+/// itself; live connectors stay disabled until valid access is supplied.
+model JobSourceConnector {
+  id                 String            @id @default(cuid())
+  key                String            @unique
+  label              String
+  kind               String
+  source             RequirementSource
+  baseUrl            String?
+  credentialConfigured Boolean         @default(false)
+  enabled            Boolean           @default(false)
+  lastSyncAt         DateTime?
+  lastError          String?
+  note               String?
+  createdAt          DateTime          @default(now())
+
+  @@map("job_source_connectors")
+}
+
+/// The end-to-end workflow tying discovery, matching and pathways together.
+model OrchestrationRun {
+  id                 String                @id @default(cuid())
+  candidateProfileId String
+  triggeredById      String
+  status             OrchestrationStatus
+  mode               AiMode
+  targetJobId        String?
+  currentStep        String?
+  errorStep          String?
+  errorMessage       String?
+  startedAt          DateTime              @default(now())
+  finishedAt         DateTime?
+
+  candidateProfile CandidateProfile       @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  steps            OrchestrationStep[]
+
+  @@index([candidateProfileId, startedAt])
+  @@map("orchestration_runs")
+}
+
+model OrchestrationStep {
+  id             String                  @id @default(cuid())
+  runId          String
+  agent          AiAgentName
+  position       Int
+  status         OrchestrationStepStatus
+  aiRunId        String?
+  producedCount  Int                     @default(0)
+  blockedCount   Int                     @default(0)
+  durationMs     Int                     @default(0)
+  fallbackReason String?
+  detail         Json?
+
+  run       OrchestrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  aiRun     AiRun?           @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+
+  @@unique([runId, position])
+  @@map("orchestration_steps")
+}
+
+/// Reviewer queue for consequential decisions. Nothing here is auto-approved.
+model ReviewTask {
+  id             String           @id @default(cuid())
+  kind           ReviewTaskKind
+  status         ReviewTaskStatus @default(OPEN)
+  subjectType    String
+  subjectId      String
+  organizationId String?
+  candidateProfileId String?
+  jobId          String?
+  reason         String
+  payload        Json?
+  assigneeRole   String           @default("ADMIN")
+  createdById    String?
+  decidedById    String?
+  decisionNote   String?
+  createdAt      DateTime         @default(now())
+  decidedAt      DateTime?
+
+  @@index([status, kind])
+  @@index([organizationId])
+  @@map("review_tasks")
+}
+
+/// Configurable matching weights. Prompt 3 treats these as prototype
+/// assumptions, so they are stored, versioned and editable rather than baked in:
+/// every Match records the weight version that produced it.
+model WeightProfile {
+  id          String   @id @default(cuid())
+  version     String   @unique
+  label       String
+  required    Float    @default(0.5)
+  preferred   Float    @default(0.2)
+  evidence    Float    @default(0.2)
+  preferences Float    @default(0.1)
+  active      Boolean  @default(false)
+  note        String?
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+  @@map("weight_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Identity disclosure consent + persisted graph edits (Prompt 3)
+// ---------------------------------------------------------------------------
+
+enum DisclosureRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  WITHDRAWN
+  EXPIRED
+}
+
+/// An employer's request to lift the anonymity on one profile. The candidate
+/// decides; nothing is revealed by the request itself. Applying to a role is a
+/// separate, equally explicit route to disclosure — see `canRevealIdentity`.
+model IdentityDisclosureRequest {
+  id                 String                  @id @default(cuid())
+  candidateProfileId String
+  organizationId     String
+  jobId              String?
+  requestedById      String
+  reason             String
+  status             DisclosureRequestStatus @default(PENDING)
+  decidedById        String?
+  decidedAt          DateTime?
+  decisionNote       String?
+  expiresAt          DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  job              Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([candidateProfileId, status])
+  @@index([organizationId, status])
+  @@index([status, createdAt])
+  @@map("identity_disclosure_requests")
+}
+
+/// Where a candidate placed, hid, renamed or annotated a graph node. The graph
+/// is generated from live records every time it opens; only these human edits are
+/// stored, which keeps the picture honest and still lets it be rearranged.
+model GraphAnnotation {
+  id                 String   @id @default(cuid())
+  candidateProfileId String
+  nodeKey            String
+  positionX          Float?
+  positionY          Float?
+  hidden             Boolean  @default(false)
+  labelOverride      String?
+  note               String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateProfileId, nodeKey])
+  @@map("graph_annotations")
+}

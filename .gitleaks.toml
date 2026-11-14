@@ -1,0 +1,49 @@
+title = "SYPRUS secret scanning"
+
+# The default gitleaks ruleset plus two rules for the credential classes this
+# repository actually holds. Run with --redact so a finding never prints the
+# value it matched.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "syprus-database-url"
+description = "Postgres connection string with an embedded password"
+# The default ruleset has no connection-string rule, and DATABASE_URL is the
+# credential most likely to be pasted into this repository. Angle-bracket
+# placeholders (<password>) and ${...} interpolation are excluded: they are
+# documentation and code, not secrets.
+regex = '''(?i)postgres(?:ql)?://[^\s:@/'"<>]+:([^<>\s@/'"${}]{3,})@'''
+secretGroup = 1
+keywords = ["postgres://", "postgresql://"]
+
+[[rules]]
+id = "syprus-supabase-secret"
+description = "Supabase secret API key or personal access token"
+# Publishable and anon keys are deliberately not matched: they are meant to be
+# public. Only the secret key and the account-level personal token are.
+regex = '''\b(sb_secret_[0-9A-Za-z_-]{16,}|sbp_[0-9a-f]{32,})\b'''
+secretGroup = 1
+keywords = ["sb_secret_", "sbp_"]
+
+# The Supabase Root 2021 CA in src/lib/db/supabase-pooler.ts is a public
+# certificate, not a credential, and is scanned like everything else — no rule
+# matches it and none is excluded. The same goes for the fixture strings in
+# tests/ ("fixture-secret-only", "test-key-not-secret"): they are inert literals
+# that no rule matches, so they need no exception either.
+
+[[allowlists]]
+description = """
+The two loopback-only cluster passwords this repository publishes on purpose:
+syprus_local_dev (dev cluster, port 55432) and syprus_qa_local (disposable QA
+cluster, port 55433). Both are documented in .env.example, both only ever
+authenticate to 127.0.0.1, and src/lib/db/seed-guard.ts refuses any non-loopback
+seed target.
+
+Scoped by value, not by path, and anchored: the whole secret must equal one of
+these two strings. A `paths` allowlist is deliberately not used — gitleaks
+applies path allowlists to whole files, so listing scripts/ or tests/ would stop
+it reading anything else in them, including a real credential.
+"""
+regexTarget = "secret"
+regexes = ['''^(syprus_local_dev|syprus_qa_local)$''']

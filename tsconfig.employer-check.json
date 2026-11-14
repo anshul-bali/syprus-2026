@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/server/actions/employer.ts",
+    "src/components/employer/**/*.tsx",
+    "src/app/(portal)/employer/**/*.tsx",
+    "src/app/(portal)/employer/_data/**/*.ts"
+  ]
+}

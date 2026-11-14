@@ -1,0 +1,17 @@
+.next
+.next-qa
+.next-qa-build
+.next.stalled-backup
+.postgres
+.qa-logs
+test-results
+playwright-report
+storage
+node_modules
+.env
+.env.local
+.env.supabase
+.env.backup-before-supabase
+.env.pre-fallback
+supabase/.temp
+.vercel
