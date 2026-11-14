@@ -1,25 +1,90 @@
-# SYPRUS
+# SYPRUS — Skills-First Career Re-entry Platform
 
-An AI-assisted, skills-first career re-entry platform for women returning to work after
-caregiving or another career break. SYPRUS surfaces transferable competencies, identifies
-learning needs against a target role, and connects candidates with employers through explainable
-skills matching instead of career-gap-based screening.
+**Helping women translate experience into skills, learning plans, and career opportunities.**
 
-> **Scope of this build.** SYPRUS here is a runnable full-stack MVP with a live AI layer. Five
-> agents — the four batch agents plus **SYPRUS Sona**, the assistant inside the signed-in portals —
-> run against whichever approved provider is configured as primary. This deployment uses
-> **OpenRouter** (`google/gemini-2.5-flash-lite`), with **Groq** and **Google Gemini** as failover.
-> Which one is primary is an operator setting (`AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`); the other
-> two keep their own `*_API_KEY` variables and are tried in order. Every agent also has a
-> **deterministic rule engine** that answers when no provider can, and every stored result records
-> which path produced it — the product labels this throughout, including on the Agent health screen,
-> which states that stored runs do not prove a provider is reachable now.
->
-> What this build still does **not** claim: real AI verification of a skill (a pass is this
-> platform's own question set), live labour-market intelligence (agent 2 compares postings stored
-> in this database), elimination of bias (agent 4 flags language for a human and the fairness
-> monitor describes stored score distributions), or actual job placement. All people,
-> organisations and roles created by the seed script are demonstration data.
+[Website](https://syprus-2026.vercel.app) · [Setup](#setup) · [Architecture](docs/ARCHITECTURE.md) · [Feature status](docs/FEATURE_COMPLETION.md) · [Demo walkthrough](docs/DEMO_SCRIPT.md)
+
+## Project overview
+
+SYPRUS is a full-stack, AI-assisted career re-entry platform for women returning to work after caregiving or another career break. It brings skills discovery, gap analysis, personalised learning, explainable job matching, and employer recruitment workflows into one application.
+
+This repository is the **main home of the SYPRUS project**: its application source, database migrations, AI integrations, tests, and technical documentation. It can be understood and run independently.
+
+The central idea is simple: a career break does not describe everything a person can do. SYPRUS helps candidates document capabilities from professional and other relevant experiences, review suggested skills, and compare their profile with the requirements of a target role. Employers can review skills and match explanations before requesting access to a candidate's identity.
+
+**Project status:** functional full-stack MVP. The repository includes persistent candidate, employer, and administrator workflows, configurable AI providers, and deterministic fallbacks. Production deployment prerequisites and current limitations are documented below; demonstration records are fictional.
+
+## The problem
+
+Returning professionals may struggle to express transferable experience, identify which skills need refreshing, and navigate recruitment processes that emphasise uninterrupted employment. Employers also need a structured way to assess role-relevant capabilities and understand why a candidate appears suitable.
+
+SYPRUS addresses these needs by organising experience around skills, showing the reasoning behind role matches, and giving candidates control over identity disclosure. It supports informed decisions by candidates and recruiters; it does not make hiring decisions for them.
+
+## How SYPRUS works
+
+1. **Describe experience.** A candidate registers, completes verification, and records professional experience, caregiving experience, goals, and consent preferences.
+2. **Review suggested skills.** Skills discovery proposes capabilities grounded in the candidate's wording. The candidate can confirm, edit, or reject each suggestion.
+3. **Explore capabilities.** A skills inventory, evidence records, practice assessments, and an interactive capability graph help organise the profile.
+4. **Understand role readiness.** The platform compares skills with stored job requirements, explains weighted match scores, and identifies required and preferred gaps.
+5. **Build a learning plan.** Personalised pathways use the available resource catalogue, with ordered steps and progress tracking.
+6. **Connect with employers.** Candidates explore roles and track applications. Employers review anonymised profiles, shortlist candidates, request identity disclosure, and manage interview invitations.
+7. **Stay in control.** Candidates manage sharing and disclosure decisions; administrators oversee moderation, operational health, and audit records.
+
+## Three connected portals
+
+| Portal | Main capabilities |
+| --- | --- |
+| **Candidate** | Conversational onboarding, skills suggestions, evidence uploads, practice assessments, interactive capability graph, skill-gap reports, learning pathways, recommended roles, applications, notifications, and privacy controls. |
+| **Employer** | Organisation profile, role publishing and management, required/preferred skill definitions, anonymised candidate review, explainable matching, shortlisting, disclosure requests, application pipeline, interview invitations, and posting-language review. |
+| **Administrator** | User and organisation management, role moderation, human review queues, matching-weight configuration, AI and rule-engine monitoring, fairness reporting, and audit history. |
+
+## Five AI-assisted components
+
+| Component | Purpose | Boundaries |
+| --- | --- | --- |
+| **Skills Discovery** | Proposes transferable skills from candidate-provided experience, with supporting quotes. | Suggestions require candidate review; they are not independently verified credentials. |
+| **Market Intelligence** | Explains alignment and gaps against requirements in stored job postings. | Uses the platform's database, not a live labour-market feed. |
+| **Learning Pathways** | Organises learning steps around identified gaps and available resources. | Uses the resource catalogue and identifies gaps it cannot cover. |
+| **Bias Audit** | Flags potentially exclusionary posting language and suggests changes for review. | Supports human review; it does not certify that recruitment is bias-free. |
+| **SYPRUS Sona** | Answers questions inside the signed-in portals using facts available to the current account. | Access is scoped to the user's role and authorised data. |
+
+The AI layer supports **OpenRouter, Groq, and Google Gemini** through a configurable provider chain. Structured outputs are validated, runs record which provider or fallback produced the result, and deterministic rule engines provide a fallback path. See [AI integration](docs/AI_INTEGRATION.md) for the contracts, guardrails, and failure behaviour.
+
+## Architecture at a glance
+
+| Layer | Responsibility |
+| --- | --- |
+| **Next.js + React interface** | Public website and role-specific portals, responsive layouts, light/dark themes, forms, graphs, and reporting. |
+| **Server actions and API routes** | Authentication checks, permissions, validation, candidate ownership, organisation scoping, and workflow mutations. |
+| **Domain and AI services** | Skills discovery, weighted matching, learning plans, posting review, assistant responses, and run attribution. |
+| **Prisma + PostgreSQL** | Persistent profiles, skills, roles, applications, consent history, learning progress, and audit records. |
+| **External integrations** | Configured AI providers and verification-email delivery. Credentials remain server-side. |
+
+The application uses TypeScript across both interface and server code. React components render the page structure, Tailwind CSS and shared styles control presentation, and PostgreSQL stores application data.
+
+## Privacy and explainability
+
+- **Skills-based review:** career-break length and reason are excluded from employer views and match scoring.
+- **Visible match reasoning:** candidates and employers can inspect the weighted components behind recommendations.
+- **Candidate-controlled identity sharing:** employer access depends on explicit application consent or an approved disclosure request.
+- **Revocable disclosure:** candidates can withdraw sharing; consent decisions are recorded as history.
+- **Server-enforced access:** permissions, record ownership, and organisation boundaries are checked on the server.
+- **Traceable AI:** stored runs distinguish provider-generated answers from deterministic results.
+
+These are implemented design features, not a claim of independent security certification or guaranteed hiring fairness. The detailed security model and deployment limitations appear below.
+
+## Explore the repository
+
+| Location | Contents |
+| --- | --- |
+| [`src/`](src/) | Application interface, shared components, server logic, and AI integration. |
+| [`prisma/`](prisma/) | Database schema, migrations, and demonstration seed. |
+| [`public/`](public/) | Static assets and project imagery. |
+| [`tests/`](tests/) | Unit, integration, and browser test suites. |
+| [`scripts/`](scripts/) | Local database tooling, QA runners, and operational checks. |
+| [`docs/`](docs/) | Architecture, feature status, data model, AI contracts, and demonstration guide. |
+
+For a guided product walkthrough, start with [the demo script](docs/DEMO_SCRIPT.md). For implementation details, read [architecture](docs/ARCHITECTURE.md), [the data model](docs/DATA_MODEL.md), and [the QA report](docs/QA_REPORT.md).
 
 ---
 
@@ -31,7 +96,7 @@ skills matching instead of career-gap-based screening.
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS v4 + shadcn/ui (`base-nova` style on `@base-ui/react`), light and dark themes via `next-themes` |
 | Data | Prisma 6.19 + PostgreSQL (real persistence, migrations, seed) |
-| Auth | Auth.js v5 (`next-auth@5.0.0-beta.32`), credentials provider, JWT sessions, plus a six-digit emailed code at registration and at **every** sign-in (SendGrid v3 over `fetch`, no SDK) |
+| Auth | Auth.js v5 (`next-auth@5.0.0-beta.32`), credentials provider, JWT sessions, plus a six-digit emailed code at registration and at **every** sign-in (verification delivery through the configured mail function; see Email verification) |
 | Visualisation | `@xyflow/react` (capability graph), `recharts` (reporting, fairness, health). Every chart is `aria-hidden` and sits beside the same numbers as a table or list; filters announce their effect through a live region; a chart with no stored rows says so instead of drawing a shape. |
 | Validation | Zod v4, shared between client forms and server functions |
 
@@ -88,7 +153,7 @@ loopback database — see [Seeding safeguards](#seeding-safeguards).
 | Employer (verified) | `recruitment@ashford.example.com` | Ashford Health Partners — published roles. |
 | Employer (verified) | `people@meridian.example.com` | Meridian Media — publishes the marketing and coordination roles the Anshika demo matches. |
 | Employer (pending) | `people@lumen.example.com` | Lumen Analytics — demonstrates the verification gate: its role stays unpublished. |
-| Candidate | `anshika@example.com` | **The Prompt 3 walkthrough.** Marketing Analyst, 36-month caregiving break, 13 skills mixing professional and care-derived claims, targeting Marketing Operations Coordinator; shortlisted at Meridian and applied at Northwind. |
+| Candidate | `anshika@example.com` | **Featured demonstration candidate.** Marketing Analyst, 36-month caregiving break, 13 skills mixing professional and care-derived claims, targeting Marketing Operations Coordinator; shortlisted at Meridian and applied at Northwind. |
 | Candidate | `priya.n@example.com` | Operations background, 38-month break, strong match set. |
 | Candidate | `sana.q@example.com` | Finance/bookkeeping, 52-month break. |
 | Candidate | `maria.d@example.com` | Customer experience, returnship target. |
@@ -200,7 +265,7 @@ naming the endpoint that answered, and a deterministic fallback for every agent.
 [docs/AI_INTEGRATION.md](docs/AI_INTEGRATION.md).
 
 **Platform** — 48 persisted tables (verified by `npm run check:security`), server-side
-validation on every mutation, validation on every mutation, a emailed six-digit code required at registration and at every
+validation on every mutation, an emailed six-digit code required at registration and at every
 sign-in (see **Email verification**), role-based access with a database-backed permission
 catalogue, tenant scoping, anonymisation filter, audit trail, notifications, JSON APIs
 (`/api/health`, `/api/jobs`, `/api/skills`, `/api/matches/recompute`,
